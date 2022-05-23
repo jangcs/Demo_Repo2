@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+
+import sys
+import os
+import git
+from git import Repo
+import subprocess
+import argparse
+
+def crms_init(dir_path):
+    repo = Repo.init(dir_path)
+    p = subprocess.run(["dvc", "init"])
+
+def crms_add(dir_path):
+    print("CRMS ADD....")
+
+def crms_push(dir_path):
+    print("CRMS PUSH....")
+
+def crms_pull(dir_path):
+    print("CRMS PULL....")
+
+
+def crms(args):
+    if args.cmd == 'init' :
+        print("CMD = INIT")
+        crms_init(os.getcwd())
+    elif args.cmd == 'add' :
+        print("CMD = ADD")
+        crms_add(os.getcwd())
+    elif args.cmd == 'push' :
+        print("CMD = PUSH")
+        crms_push(os.getcwd())
+    elif args.cmd == 'pull' :
+        print("CMD = PULL")
+        crms_pull(os.getcwd())
+    else :
+        print("Unknown CMD")
+
+
+def arg_parse() :
+    arg_parser = argparse.ArgumentParser(prog="crms", description="Cloud Robot Model Sharing CLI")
+
+    sub_parsers = arg_parser.add_subparsers(dest="cmd", help="sub-command help", required=True)
+    
+    parser_init =   sub_parsers.add_parser('init',  help="CRMS INIT : crms init <model_name>" )
+    parser_add  =   sub_parsers.add_parser('add',   help="CRMS ADDS MODEL_FILES: crms add <model_files>...")
+    parser_push =   sub_parsers.add_parser('push',  help="CRMS PUSHES MODEL_FILES With VERSION_TAG : crms push <version>")
+    parser_pull =   sub_parsers.add_parser('pull',  help="CRMS PULL MODEL With VERSION_TAG : crms pull <model_name> [--version=<latest>|<version_tag>]")
+
+
+    parser_init.add_argument("model_name", type=str,  action="store", help="model_name is required")
+
+    parser_add.add_argument("model_files", type=str,  action="store", nargs="*", help="model_files are required")
+
+    parser_push.add_argument("version", type=str,  action="store", help="version is required")
+
+    parser_pull.add_argument("model_name",  action="store", help="model_name is required")
+    parser_pull.add_argument("-v", "--version", type=str,  default="latest", action="store", help="--version=<latest>|<version_tag>")
+
+    args = arg_parser.parse_args()
+    return args
+
+
+if __name__=='__main__':
+    args = arg_parse()
+    print(args)
+    # print(dir(args))
+    # print(type(args))
+    crms(args)
+
