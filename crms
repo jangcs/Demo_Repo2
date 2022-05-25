@@ -8,7 +8,21 @@ import subprocess
 import argparse
 
 def crms_init(dir_path):
-    repo = Repo.init(dir_path)
+    # repo = Repo.init(dir_path)
+    repo = Repo(dir_path)  # 'git init ' & 'git remote add origin ~~ '  must be prepared before 'crms init'
+    
+    remotes = repo.remotes # [<git.Remote "origin">, ...]
+    if len(remotes) <= 0 :
+        print("Error: git remote origin must be added before crms init.")
+        print("Try: git remote add origin git@github.com:<user_name>/<repository_name.git>")    
+        sys.exit(-1)
+
+    origin = remotes[0]   # <git.Remote "origin">
+    urls = origin.urls    # <generator object Remote.urls at 0x7fa164d235f0>
+    url = next(urls)
+
+    print("Git Repository URL : " + url)
+
     p = subprocess.run(["dvc", "init"])
 
 def crms_add(dir_path):
@@ -46,7 +60,7 @@ def arg_parse() :
     parser_init =   sub_parsers.add_parser('init',  help="CRMS INIT : crms init <model_name>" )
     parser_add  =   sub_parsers.add_parser('add',   help="CRMS ADDS MODEL_FILES: crms add <model_files>...")
     parser_push =   sub_parsers.add_parser('push',  help="CRMS PUSHES MODEL_FILES With VERSION_TAG : crms push <version>")
-    parser_pull =   sub_parsers.add_parser('pull',  help="CRMS PULL MODEL With VERSION_TAG : crms pull <model_name> [--version=<latest>|<version_tag>]")
+    parser_pull =   sub_parsers.add_parser('pull',  help="CRMS PULL MODEL With VERSION_TAG : crms pull <model_name> [--version=<latest>|<version_tag>] [--target=<target_dir>] ")
 
 
     parser_init.add_argument("model_name", type=str,  action="store", help="model_name is required")
@@ -57,6 +71,7 @@ def arg_parse() :
 
     parser_pull.add_argument("model_name",  action="store", help="model_name is required")
     parser_pull.add_argument("-v", "--version", type=str,  default="latest", action="store", help="--version=<latest>|<version_tag>")
+    parser_pull.add_argument("-t", "--target", type=str,  default="", action="store", help="--target=<target_dir>")
 
     args = arg_parser.parse_args()
     return args
