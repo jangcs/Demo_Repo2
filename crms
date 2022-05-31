@@ -184,7 +184,7 @@ def crms_init(args):
 
 def crms_add(args):
     # List to be added to Git
-    git_add_list = ['.dvcignore', '.dvc/config', '.crms/config']  # + *.dvc
+    git_add_list = ['.dvcignore', '.dvc/config', '.gitignore', '.crms/config']  # + *.dvc
 
     # Check model files to be added
     model_files = args.model_files
@@ -239,6 +239,22 @@ def crms_add(args):
 
 
 def crms_push(args):
+
+    #### Check CRMS Config File Existence
+    dir_path = os.getcwd()
+    path_config = os.path.join(dir_path, ".crms", "config")
+    if not os.path.exists(path_config) :
+        print("CRMS ERROR: crms conf was not called")
+        sys.exit(-1)
+
+    #### Add model_name to crms config file 
+    with open(path_config) as f:
+        configs = yaml.load(f, Loader=yaml.FullLoader)
+
+    if 'model' not in configs :          # if crms init was called --> model exists   
+        print("Error: crms init was not called")
+
+    # open git repo
     dir_path = os.getcwd()
     try :
         repo = Repo(dir_path)  # 'git init'  must be prepared before 'crms init'
@@ -258,23 +274,50 @@ def crms_push(args):
         print("Try: git remote add origin git@github.com:<user_name>/<repository_name.git>")    
         sys.exit(-1)
 
-    origin = remotes[0]   # <git.Remote "origin">
-    urls = origin.urls    # <generator object Remote.urls at 0x7fa164d235f0>
-    url = next(urls)
 
-    print("Git Repository URL : " + url)
+    tagName = args.version
+    print("Creating TagReference.")
+    git.refs.tag.TagReference.create(repo, tagName)
 
-    # p = subprocess.run(["dvc", "init"])
-    pass
+    #origin = repo.remotes.origin
+    remote_origin = repo.remotes[0]   # repo.remotes.origin (=origin)
+    print("Push to main of remote " + remote_origin.name)
 
-    print("CRMS PUSH....")
+    #origin.push('main')
+    remote_origin.push(repo.active_branch.name)   # main
+
+    print("Push tag : " + tagName)
+    remote_origin.push(tagName)
+
+
+
+    # origin = remotes[0]   # <git.Remote "origin">
+    # urls = origin.urls    # <generator object Remote.urls at 0x7fa164d235f0>
+    # url = next(urls)
+
+    # print("Git Repository URL : " + url)
+
+    # # p = subprocess.run(["dvc", "init"])
+    # pass
+
+
+    #### DVC Push
+    p = subprocess.run(["dvc", "push"])
+    # print("Return code : {} = {}".format(type(p.returncode), p.returncode))
+    if p.returncode == 0 : # success of subprocess.run
+        print("CRMS pushes to DVC...")
+    else: # fail of subprocess.run
+        print("CRMS failed of DVC Push...")
+        sys.exit(-1)
+
+    print("CRMS PUSHED....")
 
 def crms_pull(args):
     print("CRMS PULL....")
 
 
 def crms(args):
-    if args.cmd == 'conf' :
+    if args.cmd == 'conf':
         crms_conf(args)
     elif args.cmd == 'conf_mod' :
         crms_conf_mod(args)
@@ -295,7 +338,7 @@ def arg_parse() :
 
     sub_parsers = arg_parser.add_subparsers(dest="cmd", help="sub-command help", required=True)
     
-    parser_conf =   sub_parsers.add_parser('conf',  help="CRMS CONFIG : crms conf <git_remote_url> <dvc_remote_url>" )
+    parser_conf =   sub_parsers.add_parser('conf',  help="CRMS CONFIG : crms conf <git_remote_url> <dvc_remote_url>")
     parser_conf_mod =   sub_parsers.add_parser('conf_mod',  help="CRMS CONFIG MODIFY : crms conf_mod [-g <git_remote_url>] [-d <dvc_remote_url>]" )
     parser_init =   sub_parsers.add_parser('init',  help="CRMS INIT : crms init <model_name>" )
     parser_add  =   sub_parsers.add_parser('add',   help="CRMS ADDS MODEL_FILES: crms add <model_files>...")
