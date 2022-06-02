@@ -314,6 +314,39 @@ def crms_push(args):
 
 def crms_pull(args):
     print("CRMS PULL....")
+    
+    if args.target != '' :
+        target = args.target
+    else :
+        # target = os.path.join( os.getcwd(), args.model_name)
+        target = os.path.join( os.getcwd(), "crms_model")
+
+    # repo = Repo.clone_from("git@github.com:jangcs/KKK.git", os.getcwd() )
+    repo = Repo.clone_from(args.model_url, target )
+
+    if args.version == 'latest' : 
+        os.chdir(target)
+        p = subprocess.run(["dvc", "pull"])
+        if p.returncode == 0 : # success of subprocess.run
+            print("CRMS pulled model files form DVC to " + target)
+        else: # fail of subprocess.run
+            print("CRMS failed to pull model files...")
+            sys.exit(-1)
+    else :
+        past_branch = repo.create_head('crms_target', args.version)
+        repo.heads.crms_target.checkout()
+
+        os.chdir(target)
+        p = subprocess.run(["dvc", "pull"])
+        if p.returncode == 0 : # success of subprocess.run
+            print("CRMS pulled model files form DVC to " + target)
+        else: # fail of subprocess.run
+            print("CRMS failed to pull model files...")
+            sys.exit(-1)
+
+        # repo.heads.master.checkout()
+        # repo.delete_head('crms_target')
+
 
 
 def crms(args):
@@ -345,7 +378,6 @@ def arg_parse() :
     parser_push =   sub_parsers.add_parser('push',  help="CRMS PUSHES MODEL_FILES With VERSION_TAG : crms push <version>")
     parser_pull =   sub_parsers.add_parser('pull',  help="CRMS PULL MODEL With VERSION_TAG : crms pull <model_name> [--version=<latest>|<version_tag>] [--target=<target_dir>] ")
 
-
     parser_conf.add_argument("git_remote", type=str,  action="store", help="git_remote_url is required")
     parser_conf.add_argument("dvc_remote", type=str,  action="store", help="dvc_remote_url is required")
 
@@ -358,7 +390,8 @@ def arg_parse() :
 
     parser_push.add_argument("version", type=str,  action="store", help="version is required")
 
-    parser_pull.add_argument("model_name",  action="store", help="model_name is required")
+    parser_pull.add_argument("model_url",  action="store", help="model_url is required")
+    # parser_pull.add_argument("model_name",  action="store", help="model_name is required")
     parser_pull.add_argument("-v", "--version", type=str,  default="latest", action="store", help="--version=<latest>|<version_tag>")
     parser_pull.add_argument("-t", "--target", type=str,  default="", action="store", help="--target=<target_dir>")
 
