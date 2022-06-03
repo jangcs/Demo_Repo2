@@ -319,8 +319,9 @@ def crms_pull(args):
         target = args.target
     else :
         # target = os.path.join( os.getcwd(), args.model_name)
-        target = os.path.join( os.getcwd(), "crms_model")
-
+        # target = os.path.join( os.getcwd(), "model_crms")
+        target = os.path.join( os.getcwd(), os.path.basename(args.model_url).split('.')[0] )   # git@github.com:jangcs/KKK.git -> KKK.git -> ['KKK', 'git']
+        
     # repo = Repo.clone_from("git@github.com:jangcs/KKK.git", os.getcwd() )
     repo = Repo.clone_from(args.model_url, target )
 
