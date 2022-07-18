@@ -9,6 +9,10 @@ import subprocess
 import argparse
 import yaml
 
+import firebase_admin
+from firebase_admin import credentials
+from firebase_admin import firestore
+
 def crms_conf(args):
 
     dir_path = os.getcwd()
@@ -181,6 +185,12 @@ def crms_init(args):
 #         #     f.write("git_remote : {}\n".format(url))
 
 
+    firebase_options = {'projectId':'gcp-test-710302'}
+    firebase_app = firebase_admin.initialize_app(options=firebase_options)
+    db = firestore.client()
+    doc_ref = db.collection('models').document(args.model_name)   # DocumentReference
+    doc_ref.set({'git_repository': configs['git']['remote'], 'dvc_repository':configs['dvc']['remote']})
+
 
 def crms_add(args):
     # List to be added to Git
@@ -290,7 +300,6 @@ def crms_push(args):
     remote_origin.push(tagName)
 
 
-
     # origin = remotes[0]   # <git.Remote "origin">
     # urls = origin.urls    # <generator object Remote.urls at 0x7fa164d235f0>
     # url = next(urls)
@@ -309,6 +318,14 @@ def crms_push(args):
     else: # fail of subprocess.run
         print("CRMS failed of DVC Push...")
         sys.exit(-1)
+
+
+    firebase_options = {'projectId':'gcp-test-710302'}
+    firebase_app = firebase_admin.initialize_app(options=firebase_options)
+    db = firestore.client()
+    doc_ref = db.collection('models').document(configs['model']['name'])   # DocumentReference
+    doc_ref.update({'latest':tagName, 'versions':firestore.ArrayUnion([tagName])})
+
 
     print("CRMS PUSHED....")
 
@@ -329,7 +346,7 @@ def crms_pull(args):
         os.chdir(target)
         p = subprocess.run(["dvc", "pull"])
         if p.returncode == 0 : # success of subprocess.run
-            print("CRMS pulled model files form DVC to " + target)
+            print("CRMS pulled model files from DVC to " + target)
         else: # fail of subprocess.run
             print("CRMS failed to pull model files...")
             sys.exit(-1)
@@ -340,7 +357,7 @@ def crms_pull(args):
         os.chdir(target)
         p = subprocess.run(["dvc", "pull"])
         if p.returncode == 0 : # success of subprocess.run
-            print("CRMS pulled model files form DVC to " + target)
+            print("CRMS pulled model files from DVC to " + target)
         else: # fail of subprocess.run
             print("CRMS failed to pull model files...")
             sys.exit(-1)
@@ -348,6 +365,22 @@ def crms_pull(args):
         # repo.heads.master.checkout()
         # repo.delete_head('crms_target')
 
+
+def crms_list(args):
+    print("CRMS LIST....")
+    
+    firebase_options = {'projectId':'gcp-test-710302'}
+    firebase_app = firebase_admin.initialize_app(options=firebase_options)
+    db = firestore.client()
+    doc_ref = db.collection('models').document(args.model_name)   # DocumentReference
+
+    versions = doc_ref.get().to_dict()['versions']
+    for v in versions :
+        print(v)
+
+    latest = doc_ref.get().to_dict()['latest']
+    print('latest = ' + latest)
+    
 
 
 def crms(args):
@@ -363,6 +396,8 @@ def crms(args):
         crms_push(args)
     elif args.cmd == 'pull' :
         crms_pull(args)
+    elif args.cmd == 'list' :
+        crms_list(args)
     else :
         print("Unknown CMD")
 
@@ -377,7 +412,8 @@ def arg_parse() :
     parser_init =   sub_parsers.add_parser('init',  help="CRMS INIT : crms init <model_name>" )
     parser_add  =   sub_parsers.add_parser('add',   help="CRMS ADDS MODEL_FILES: crms add <model_files>...")
     parser_push =   sub_parsers.add_parser('push',  help="CRMS PUSHES MODEL_FILES With VERSION_TAG : crms push <version>")
-    parser_pull =   sub_parsers.add_parser('pull',  help="CRMS PULL MODEL With VERSION_TAG : crms pull <model_name> [--version=<latest>|<version_tag>] [--target=<target_dir>] ")
+    parser_pull =   sub_parsers.add_parser('pull',  help="CRMS PULL MODEL With VERSION_TAG : crms pull <model_url> [--version=<latest>|<version_tag>] [--target=<target_dir>] ")
+    parser_list =   sub_parsers.add_parser('list',  help="CRMS LIST MODEL Versions : crms list <model_name> ")
 
     parser_conf.add_argument("git_remote", type=str,  action="store", help="git_remote_url is required")
     parser_conf.add_argument("dvc_remote", type=str,  action="store", help="dvc_remote_url is required")
@@ -395,6 +431,8 @@ def arg_parse() :
     # parser_pull.add_argument("model_name",  action="store", help="model_name is required")
     parser_pull.add_argument("-v", "--version", type=str,  default="latest", action="store", help="--version=<latest>|<version_tag>")
     parser_pull.add_argument("-t", "--target", type=str,  default="", action="store", help="--target=<target_dir>")
+
+    parser_list.add_argument("model_name",  action="store", help="model_nameis required")
 
     args = arg_parser.parse_args()
     return args
