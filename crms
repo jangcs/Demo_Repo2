@@ -22,9 +22,29 @@ def crms_conf(args):
         os.makedirs(path_crms)
         print("The new .crms directory is created !!!")
 
+    git_remote = args.git_remote
+    git_remote_split = git_remote.split(':')
+    git_tag = ''
+    if len(git_remote_split) > 2 :
+        git_tag = git_remote_split[-1]
+        del(git_remote_split[-1])
+        git_remote = ':'.join(git_remote_split) + '-' + git_tag
+
+    dvc_remote = args.dvc_remote
+    dvc_remote_split = dvc_remote.split(':')
+    dvc_tag = ''
+    if len(dvc_remote_split) > 2 :
+        dvc_tag = dvc_remote_split[-1]
+        del(dvc_remote_split[-1])
+        dvc_remote = ':'.join(dvc_remote_split) + '-' + dvc_tag
+
     #### CRMS Config File
-    configs = { 'git': {'remote' : args.git_remote }, 
-                'dvc' : {'remote': args.dvc_remote }} 
+    configs = { 'git': {'remote' : git_remote }, 
+                'dvc' : {'remote': dvc_remote  },
+                'platform': {'architecture':'x86_64',
+                             'os': 'linux',
+                             'version':'',
+                             'device':'cpu'}} 
     
     path_config = os.path.join(path_crms, "config")
     with open(path_config, 'w') as f:
@@ -58,14 +78,14 @@ def crms_conf_mod(args):
     if 'git_remote' in args_dict and args.git_remote != '':
         configs['git']['remote'] = args.git_remote
         if 'model' in configs :         # if crms init was called --> model exists
-            set_git_remote(args.git_remote)
+            set_git_remote(args.git_remote.replace(':','-'))
         else :
             print("git_remote: model is not in config")
 
     if 'dvc_remote' in args_dict and args.dvc_remote != '' :
         configs['dvc']['remote'] = args.dvc_remote
         if 'model' in configs :          # if crms init was called --> model exists   
-            set_dvc_remote(args.dvc_remote)
+            set_dvc_remote(args.dvc_remote.replace(':','-'))
         else :
             print("dvc_remote: model is not in config")
 
@@ -129,7 +149,19 @@ def crms_init(args):
         configs = yaml.load(f, Loader=yaml.FullLoader)
         print(configs)
 
-    configs['model'] = {'name': args.model_name}
+    model_name = args.model_name
+    model_name_split = model_name.split(':')
+    last_tag = ''
+    if len(model_name_split) > 1 :
+        if len(model_name_split) == 2 :
+            last_tag = model_name_split[-1]
+            del(model_name_split[-1])
+            model_name = model_name_split[0]
+        else :
+            print("CRMS ERROR: model must be a form of <model-name> or <model-name>:<model-tag>")
+            sys.exit(-1)
+
+    configs['model'] = {'name': model_name, 'tag':last_tag}
     with open(path_config, 'w') as f:
         yaml.dump(configs, f, sort_keys=False)
 
@@ -189,7 +221,15 @@ def crms_init(args):
     firebase_app = firebase_admin.initialize_app(options=firebase_options)
     db = firestore.client()
     doc_ref = db.collection('models').document(args.model_name)   # DocumentReference
-    doc_ref.set({'git_repository': configs['git']['remote'], 'dvc_repository':configs['dvc']['remote']})
+    doc_ref.set({'name': model_name, 
+                 'git_repository': configs['git']['remote'], 
+                 'dvc_repository':configs['dvc']['remote'],
+                 'platform': {
+                     'architecture' : configs['platform']['architecture'],
+                     'os'           : configs['platform']['os'],
+                     'version'      : configs['platform']['version'], 
+                     'device'       : configs['platform']['device'] 
+                 }})
 
 
 def crms_add(args):
@@ -323,7 +363,15 @@ def crms_push(args):
     firebase_options = {'projectId':'gcp-test-710302'}
     firebase_app = firebase_admin.initialize_app(options=firebase_options)
     db = firestore.client()
-    doc_ref = db.collection('models').document(configs['model']['name'])   # DocumentReference
+
+    last_tag = ''
+    if 'tag' in configs['model'] :
+        last_tag = configs['model']['tag']
+
+    if last_tag != '' :
+        doc_ref = db.collection('models').document(configs['model']['name']+':'+last_tag)   # DocumentReference
+    else :
+        doc_ref = db.collection('models').document(configs['model']['name'])   # DocumentReference
     doc_ref.update({'latest':tagName, 'versions':firestore.ArrayUnion([tagName])})
 
 
@@ -366,21 +414,46 @@ def crms_pull(args):
         # repo.delete_head('crms_target')
 
 
+def crms_desc(args):
+    print("CRMS DESC....")
+    
+    firebase_options = {'projectId':'gcp-test-710302'}
+    firebase_app = firebase_admin.initialize_app(options=firebase_options)
+    db = firestore.client()
+    # doc_ref = db.collection('models').document(args.model_name)   # DocumentReference
+
+    docs = db.collection('models').where('name', '==', args.model_name).stream()   # DocumentReference
+
+    for doc in docs:
+        print(doc.id)
+
+        d = doc.to_dict()
+
+        print('\tRepository: '+d['git_repository'])
+
+
+        print('\tVersions')
+        versions = d['versions']
+        for v in versions :
+            print('\t\t' + v)
+
+        latest = d['latest']
+        print('\tLatest = ' + latest)
+    
+
 def crms_list(args):
     print("CRMS LIST....")
     
     firebase_options = {'projectId':'gcp-test-710302'}
     firebase_app = firebase_admin.initialize_app(options=firebase_options)
     db = firestore.client()
-    doc_ref = db.collection('models').document(args.model_name)   # DocumentReference
+    # doc_ref = db.collection('models').document(args.model_name)   # DocumentReference
 
-    versions = doc_ref.get().to_dict()['versions']
-    for v in versions :
-        print(v)
-
-    latest = doc_ref.get().to_dict()['latest']
-    print('latest = ' + latest)
+    docs = db.collection('models').list_documents()
     
+    for doc in docs:
+        print(doc.id)
+
 
 
 def crms(args):
@@ -398,6 +471,8 @@ def crms(args):
         crms_pull(args)
     elif args.cmd == 'list' :
         crms_list(args)
+    elif args.cmd == 'desc' :
+        crms_desc(args)
     else :
         print("Unknown CMD")
 
@@ -413,7 +488,8 @@ def arg_parse() :
     parser_add  =   sub_parsers.add_parser('add',   help="CRMS ADDS MODEL_FILES: crms add <model_files>...")
     parser_push =   sub_parsers.add_parser('push',  help="CRMS PUSHES MODEL_FILES With VERSION_TAG : crms push <version>")
     parser_pull =   sub_parsers.add_parser('pull',  help="CRMS PULL MODEL With VERSION_TAG : crms pull <model_url> [--version=<latest>|<version_tag>] [--target=<target_dir>] ")
-    parser_list =   sub_parsers.add_parser('list',  help="CRMS LIST MODEL Versions : crms list <model_name> ")
+    parser_list =   sub_parsers.add_parser('list',  help="CRMS LIST Models : crms list")
+    parser_desc =   sub_parsers.add_parser('desc',  help="CRMS DESCRIBE MODEL Versions : crms desc <model_name> ")
 
     parser_conf.add_argument("git_remote", type=str,  action="store", help="git_remote_url is required")
     parser_conf.add_argument("dvc_remote", type=str,  action="store", help="dvc_remote_url is required")
@@ -432,7 +508,7 @@ def arg_parse() :
     parser_pull.add_argument("-v", "--version", type=str,  default="latest", action="store", help="--version=<latest>|<version_tag>")
     parser_pull.add_argument("-t", "--target", type=str,  default="", action="store", help="--target=<target_dir>")
 
-    parser_list.add_argument("model_name",  action="store", help="model_nameis required")
+    parser_desc.add_argument("model_name",  action="store", help="model_nameis required")
 
     args = arg_parser.parse_args()
     return args
