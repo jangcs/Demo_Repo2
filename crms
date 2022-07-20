@@ -422,7 +422,11 @@ def crms_desc(args):
     db = firestore.client()
     # doc_ref = db.collection('models').document(args.model_name)   # DocumentReference
 
-    docs = db.collection('models').where('name', '==', args.model_name).stream()   # DocumentReference
+    doc = db.collection('models').document(args.model_name).get()   # DocumentReference
+    if doc.exists :
+        docs = [doc]
+    else :
+        docs = db.collection('models').where('name', '==', args.model_name).stream()   # DocumentReference
 
     for doc in docs:
         print(doc.id)
